@@ -8,15 +8,16 @@ from typing import Dict, List
 import faiss
 import numpy as np
 from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
 
 from .config import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
+    EMBEDDING_MODEL_NAME,
     FAISS_INDEX_PATH,
     POLICIES_DIR,
     POLICIES_METADATA_PATH,
 )
-from .embeddings import embed_texts
 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
@@ -27,14 +28,11 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
     while start < text_length:
         end = min(start + chunk_size, text_length)
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
+        chunks.append(text[start:end])
         if end == text_length:
             break
-        step = max(chunk_size - overlap, 1)
-        start += step
-    return chunks
+        start = max(end - overlap, end) if overlap >= chunk_size else end - overlap
+    return [c.strip() for c in chunks if c.strip()]
 
 
 def extract_text_from_pdf(pdf_path: Path) -> str:
@@ -52,6 +50,7 @@ def build_index() -> None:
             f"No PDFs found in {POLICIES_DIR}. Please add policy PDFs before ingestion."
         )
 
+    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     embeddings: List[np.ndarray] = []
     metadata: List[Dict[str, str | int | float]] = []
 
@@ -63,7 +62,7 @@ def build_index() -> None:
         if not chunks:
             continue
 
-        chunk_embeddings = embed_texts(chunks)
+        chunk_embeddings = model.encode(chunks, convert_to_numpy=True, normalize_embeddings=True)
         for idx, (chunk_text_value, embedding) in enumerate(zip(chunks, chunk_embeddings)):
             embeddings.append(embedding)
             metadata.append(

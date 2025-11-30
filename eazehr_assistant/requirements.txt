@@ -1,4 +1,4 @@
 faiss-cpu
-google-generativeai
+sentence-transformers
 pypdf
 numpy
